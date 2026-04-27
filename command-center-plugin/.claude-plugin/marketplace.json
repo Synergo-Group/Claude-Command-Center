@@ -1,0 +1,15 @@
+{
+  "name": "synergo-plugins",
+  "owner": {
+    "name": "Synergo Group",
+    "url": "https://github.com/Synergo-Group"
+  },
+  "plugins": [
+    {
+      "name": "command-center",
+      "source": ".",
+      "description": "Personal command center — pulls priority items from Gmail, Slack DMs, and Jira into one Cowork dashboard with quick reply/snooze/done actions.",
+      "version": "1.0.0"
+    }
+  ]
+}
