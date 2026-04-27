@@ -8,8 +8,8 @@
     {
       "name": "command-center",
       "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/Synergo-Group/Claude-Command-Center",
+        "source": "github",
+        "repo": "Synergo-Group/Claude-Command-Center",
         "path": "command-center"
       },
       "description": "Personal command center — pulls priority items from Gmail, Slack DMs, and Jira into one Cowork dashboard with quick reply/snooze/done actions.",
