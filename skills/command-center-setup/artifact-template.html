@@ -537,17 +537,23 @@ function renderCard(t) {
       actionsEl.appendChild(btn);
     }
     if (t.permalink) {
-      const linkBtn = document.createElement('button');
+      const linkBtn = document.createElement('a');
       linkBtn.className = 'btn';
+      linkBtn.href = t.permalink;
+      linkBtn.target = '_blank';
+      linkBtn.rel = 'noopener noreferrer';
+      linkBtn.style.textDecoration = 'none';
       linkBtn.innerHTML = `Open in Slack ${svgIcon('i-ext')}`;
-      linkBtn.onclick = () => window.open(t.permalink, '_blank');
       actionsEl.appendChild(linkBtn);
     }
     if (t.jiraKey) {
-      const linkBtn = document.createElement('button');
+      const linkBtn = document.createElement('a');
       linkBtn.className = 'btn';
+      linkBtn.href = `https://synergogroup.atlassian.net/browse/${t.jiraKey}`;
+      linkBtn.target = '_blank';
+      linkBtn.rel = 'noopener noreferrer';
+      linkBtn.style.textDecoration = 'none';
       linkBtn.innerHTML = `Open in Jira ${svgIcon('i-ext')}`;
-      linkBtn.onclick = () => window.open(`https://synergogroup.atlassian.net/browse/${t.jiraKey}`, '_blank');
       actionsEl.appendChild(linkBtn);
     }
 
