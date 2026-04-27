@@ -1,0 +1,6 @@
+{
+  "name": "command-center",
+  "version": "1.0.0",
+  "description": "Personal command center for Synergo Group — pulls priority items from your Gmail, Slack DMs, and Jira into one Cowork dashboard with quick reply/snooze/done actions.",
+  "author": "Valentin Beres <valentin@synergo.group>"
+}

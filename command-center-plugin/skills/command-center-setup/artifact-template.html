@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Command Center</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --card: #ffffff;
+    --muted-bg: #f1efe8;
+    --text: #1a1a1a;
+    --muted: #5f5e5a;
+    --faint: #888780;
+    --line: rgba(0,0,0,0.1);
+    --line-strong: rgba(0,0,0,0.2);
+    --line-faint: rgba(0,0,0,0.08);
+    --priority: #A32D2D;
+    --decision: #BA7517;
+    --stale: #888780;
+    --success: #0F6E56;
+    --success-bg: #E1F5EE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  }
+  .page { max-width: 900px; margin: 0 auto; padding: 1.5rem 1.25rem; min-height: 100vh; }
+  .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: .5rem; }
+  .eyebrow { font-size: 11px; color: var(--faint); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; font-weight: 500; }
+  .greeting { font-size: 24px; font-weight: 500; }
+  .sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+  .sub .accent { color: var(--priority); font-weight: 500; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.75rem; }
+  .metric { background: var(--muted-bg); border-radius: 8px; padding: .875rem 1rem; }
+  .metric .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .metric .value { font-size: 22px; font-weight: 500; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; border-bottom: .5px solid var(--line); }
+  .tab {
+    background: transparent; border: none; padding: 8px 14px; font-size: 13px; cursor: pointer;
+    color: var(--faint); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 400;
+  }
+  .tab.active { color: var(--text); font-weight: 500; border-bottom-color: var(--text); }
+
+  .section-head { display: flex; align-items: center; gap: 8px; margin: 1.25rem 0 12px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .section-label { font-size: 13px; font-weight: 500; color: var(--text); }
+
+  .card {
+    background: var(--card);
+    border: .5px solid var(--line);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 12px;
+  }
+  .card.priority { border-left: 2px solid var(--priority); }
+  .card.muted { opacity: .65; }
+
+  .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .badge svg { width: 11px; height: 11px; }
+  .badge-gmail { background: var(--muted-bg); color: var(--muted); }
+  .badge-slack { background: #EEEDFE; color: #3C3489; }
+  .badge-jira { background: #E6F1FB; color: #0C447C; }
+  .age { font-size: 11px; color: var(--faint); }
+  .completed-at { font-size: 11px; color: var(--faint); margin-left: auto; }
+
+  .title { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+  .card.done-status .title { text-decoration: line-through; }
+  .summary { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
+
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    background: transparent; border: .5px solid var(--line-strong); border-radius: 8px;
+    padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--text);
+    font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn:hover { background: var(--muted-bg); }
+  .btn svg { width: 11px; height: 11px; }
+  .btn-mini {
+    width: 28px; height: 28px; padding: 0; display: inline-flex;
+    align-items: center; justify-content: center; border: .5px solid rgba(0,0,0,0.15);
+    background: transparent; border-radius: 8px; cursor: pointer; color: var(--muted);
+  }
+  .btn-mini:hover { background: var(--muted-bg); }
+  .btn-mini.success { color: var(--success); }
+  .btn-mini.success:hover { background: var(--success-bg); }
+  .btn-mini svg { width: 14px; height: 14px; }
+  .right { margin-left: auto; display: flex; gap: 4px; }
+  [disabled] { opacity: .5; cursor: not-allowed; }
+
+  .draft-area { margin-top: 12px; }
+  .draft {
+    padding: 12px; border-radius: 10px;
+    background: var(--muted-bg); border: .5px solid var(--line);
+  }
+  .draft .meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .draft textarea {
+    width: 100%; min-height: 110px; font: inherit;
+    border: .5px solid var(--line-strong); border-radius: 8px; padding: 10px;
+    background: #fff; resize: vertical; color: var(--text);
+  }
+  .draft .draft-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .draft .ok { color: var(--success); font-size: 13px; margin-top: 8px; }
+  .draft .err { color: var(--priority); font-size: 13px; margin-top: 8px; }
+
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--faint); font-size: 14px; }
+
+  .loading { padding: 4rem 1rem; text-align: center; color: var(--muted); }
+  .loading-status {
+    text-align: left; max-width: 480px; margin: 16px auto 0; font-size: 12px;
+    color: var(--faint); background: var(--card); border: .5px solid var(--line);
+    border-radius: 10px; padding: 12px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .warn {
+    background: #FFF7E6; border: .5px solid #F0D595; color: #6B4A00;
+    padding: 8px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 12px;
+  }
+
+  .footer {
+    font-size: 11px; color: var(--faint); text-align: center;
+    margin-top: 2rem; padding-top: 1rem; border-top: .5px solid var(--line-faint);
+  }
+
+  .btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn.primary:hover { background: #333; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div id="loading" class="loading">
+    Pulling Gmail, Slack, and Jira…
+    <pre id="load-status" class="loading-status"></pre>
+    <button id="skip-btn" class="btn" style="margin-top:14px">Show what loaded so far</button>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="header">
+      <div>
+        <div class="eyebrow" id="eyebrow"></div>
+        <div class="greeting" id="greeting">Command Center</div>
+      </div>
+    </div>
+    <div class="sub" id="sub"></div>
+    <div id="persistence-banner" style="font-size:11px;color:var(--faint);margin-bottom:1rem"></div>
+    <div id="warnings"></div>
+
+    <div class="metrics">
+      <div class="metric"><div class="label">Open</div><div class="value" id="m-open">0</div></div>
+      <div class="metric"><div class="label">Snoozed</div><div class="value" id="m-snoozed">0</div></div>
+      <div class="metric"><div class="label">Done today</div><div class="value" id="m-done">0</div></div>
+      <div class="metric"><div class="label">Stale &gt; 14d</div><div class="value" id="m-stale">0</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filter="open">Open</button>
+      <button class="tab" data-filter="snoozed">Snoozed</button>
+      <button class="tab" data-filter="done">Done</button>
+    </div>
+
+    <div id="lists"></div>
+
+    <div class="footer">
+      Pulled live from Gmail, Slack DMs, and Jira · State persisted across sessions
+    </div>
+  </div>
+
+</div>
+
+<!-- icons -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-brief" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></symbol>
+</svg>
+
+<!-- persistent state lives in this script block; updated via update_artifact MCP call -->
+<script id="embedded-state" type="application/json">{}</script>
+
+<script>
+const TOOLS = {
+  userInfo: '{{ATLASSIAN_USER_INFO}}',
+  atlassianResources: '{{ATLASSIAN_RESOURCES}}',
+  gmailSearch: '{{GMAIL_SEARCH}}',
+  gmailDraft: '{{GMAIL_DRAFT}}',
+  jiraSearch: '{{JIRA_SEARCH}}',
+  slackSearch: '{{SLACK_SEARCH}}',
+  slackDraft: '{{SLACK_DRAFT}}'
+};
+
+const STORAGE_KEY = 'cmd_center_state_v6';
+const ARTIFACT_ID = 'command-center';
+
+let lsAvailable = false;
+let stored = {};
+try {
+  localStorage.setItem('__cc_probe', '1');
+  localStorage.removeItem('__cc_probe');
+  lsAvailable = true;
+  stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+} catch (e) {
+  lsAvailable = false;
+}
+
+function readEmbeddedState() {
+  try {
+    const el = document.getElementById('embedded-state');
+    if (!el) return {};
+    const raw = el.textContent.trim();
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch (e) { return {}; }
+}
+const embedded = readEmbeddedState();
+
+function mergeStatuses(a, b) {
+  const out = { ...(a || {}) };
+  for (const [k, v] of Object.entries(b || {})) {
+    if (!out[k] || new Date(v.at || 0) > new Date(out[k].at || 0)) out[k] = v;
+  }
+  return out;
+}
+const statuses = mergeStatuses(stored.statuses || {}, embedded.statuses || {});
+
+let pendingPersistTimer = null;
+let persistInFlight = false;
+function saveState() {
+  if (lsAvailable) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ statuses })); } catch (e) {}
+  }
+  if (pendingPersistTimer) clearTimeout(pendingPersistTimer);
+  pendingPersistTimer = setTimeout(persistToArtifactBody, 2500);
+}
+
+async function persistToArtifactBody() {
+  if (persistInFlight) return;
+  persistInFlight = true;
+  try {
+    const stateJson = JSON.stringify({ statuses });
+    const currentHtml = document.documentElement.outerHTML;
+    const updated = currentHtml.replace(
+      /<script id="embedded-state" type="application\/json">[\s\S]*?<\/script>/,
+      `<script id="embedded-state" type="application/json">${stateJson}<\/script>`
+    );
+    if (updated === currentHtml) {
+      console.warn('embedded-state block not found; cannot persist via artifact body');
+      return;
+    }
+    const fullHtml = '<!doctype html>\n' + updated;
+    await window.cowork.callMcpTool('mcp__cowork__update_artifact', {
+      id: ARTIFACT_ID,
+      html: fullHtml,
+      update_summary: 'Save Done/Snooze state'
+    });
+  } catch (e) {
+    console.warn('persistToArtifactBody failed', e);
+  } finally {
+    persistInFlight = false;
+  }
+}
+
+let filter = 'open';
+let cachedTasks = [];
+
+const warnings = [];
+function warn(msg) { warnings.push(msg); updateLoadStatus(); }
+const loadStatus = {};
+function setStatus(k, v) { loadStatus[k] = v; updateLoadStatus(); }
+function updateLoadStatus() {
+  const el = document.getElementById('load-status');
+  if (!el) return;
+  const lines = Object.entries(loadStatus).map(([k, v]) => `${k}: ${v}`);
+  if (warnings.length) lines.push('— warnings —', ...warnings);
+  el.textContent = lines.join('\n');
+}
+
+function withTimeout(p, ms, label) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out (${ms}ms)`)), ms))]);
+}
+
+async function call(tool, args, timeoutMs = 20000) {
+  const short = tool.split('__').pop();
+  setStatus(short, 'calling…');
+  try {
+    if (!window.cowork || !window.cowork.callMcpTool) throw new Error('cowork.callMcpTool unavailable');
+    const res = await withTimeout(window.cowork.callMcpTool(tool, args), timeoutMs, short);
+    if (res && res.isError) throw new Error(res.content?.[0]?.text || 'tool error');
+    setStatus(short, 'ok');
+    return res;
+  } catch (e) {
+    setStatus(short, 'failed');
+    warn(`${short}: ${e.message || e}`);
+    return null;
+  }
+}
+
+function unwrap(res) {
+  if (!res) return null;
+  if (res.structuredContent) return res.structuredContent;
+  const txt = res.content?.[0]?.text;
+  if (!txt) return null;
+  try { return JSON.parse(txt); } catch { return txt; }
+}
+
+function daysSince(iso) {
+  if (!iso) return 999;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+function ageLabel(iso) {
+  const d = daysSince(iso);
+  if (d <= 0) return 'today';
+  if (d === 1) return 'yesterday';
+  if (d < 30) return `${d} days ago`;
+  return `${Math.floor(d/30)}mo ago`;
+}
+function isToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+
+function isExternalEmail(email) {
+  if (!email) return false;
+  const m = email.match(/@([^>\s]+)/);
+  if (!m) return false;
+  return !m[1].toLowerCase().includes('synergo');
+}
+function emailToName(email) {
+  if (!email) return 'Unknown';
+  const local = email.split('@')[0];
+  return local.split(/[._-]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+async function loadGmail() {
+  const res = await call(TOOLS.gmailSearch, { query: 'in:inbox newer_than:7d', pageSize: 25 });
+  const data = unwrap(res);
+  if (!data) return [];
+  return (data.threads || []).map(gmailThreadToTask).filter(Boolean);
+}
+
+function gmailThreadToTask(t) {
+  const msgs = t.messages || [];
+  if (!msgs.length) return null;
+  const latest = msgs[msgs.length - 1];
+  const myEmail = (window._user?.email || '').toLowerCase();
+  if (myEmail && (latest.sender || '').toLowerCase() === myEmail) return null;
+  const fromEmail = latest.sender || '';
+  const fromName = emailToName(fromEmail);
+  const subject = latest.subject || '(no subject)';
+  return {
+    source: 'gmail',
+    id: 'gmail-' + t.id,
+    from: fromName, fromEmail,
+    title: subject,
+    summary: latest.snippet || '',
+    received: latest.date,
+    external: isExternalEmail(fromEmail),
+    threadId: t.id,
+    actions: [{
+      kind: 'gmail-draft',
+      label: `Draft reply to ${fromName.split(' ')[0]}`,
+      to: fromEmail,
+      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+      prompt: `Draft a brief, warm reply to ${fromName} acknowledging their email "${subject}". Keep it under 100 words.`
+    }]
+  };
+}
+
+async function loadSlack() {
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const res = await call(TOOLS.slackSearch, {
+    query: `to:me after:${cutoff}`,
+    channel_types: 'im', sort: 'timestamp', sort_dir: 'desc',
+    limit: 20, response_format: 'detailed', include_context: false
+  });
+  const data = unwrap(res);
+  if (!data) return [];
+  const text = typeof data === 'string' ? data : (data.results || '');
+  const messages = parseSlackResults(text);
+  const byChannel = new Map();
+  for (const m of messages) if (!byChannel.has(m.channelId)) byChannel.set(m.channelId, m);
+  return Array.from(byChannel.values()).map(slackMsgToTask);
+}
+
+function parseSlackResults(text) {
+  const blocks = text.split(/### Result \d+ of \d+/).slice(1);
+  return blocks.map(block => {
+    const channelId = (block.match(/Channel:[^(]*\(ID:\s*([A-Z0-9]+)\)/) || [])[1];
+    const fromMatch = block.match(/From:\s*([^(]+?)\s*\(ID:\s*([A-Z0-9]+)\)/);
+    const time = (block.match(/Time:\s*([^\n]+)/) || [])[1]?.trim();
+    const permalink = (block.match(/Permalink:\s*\[link\]\(([^)]+)\)/) || [])[1];
+    const tx = block.match(/Text:\s*\n([\s\S]*?)(?:\n---|\n*$)/);
+    if (!channelId || !fromMatch) return null;
+    return {
+      channelId,
+      fromName: fromMatch[1].trim(),
+      fromUserId: fromMatch[2],
+      time: time ? new Date(time.replace(/\s[A-Z]{2,4}$/, '')).toISOString() : null,
+      permalink,
+      text: tx ? tx[1].trim() : ''
+    };
+  }).filter(Boolean);
+}
+
+function slackMsgToTask(m) {
+  const firstName = m.fromName.split(' ')[0];
+  return {
+    source: 'slack',
+    id: 'slack-' + m.channelId,
+    from: m.fromName,
+    title: m.text.length > 110 ? m.text.slice(0, 107) + '…' : m.text,
+    summary: '',
+    received: m.time,
+    external: false,
+    permalink: m.permalink,
+    channelId: m.channelId,
+    actions: [{
+      kind: 'slack-draft',
+      label: `Reply to ${firstName} on Slack`,
+      channelId: m.channelId,
+      prompt: `Draft a short, friendly Slack reply to ${m.fromName}'s message: "${m.text}". One or two sentences.`
+    }]
+  };
+}
+
+async function loadJira(cloudId) {
+  if (!cloudId) return [];
+  const res = await call(TOOLS.jiraSearch, {
+    cloudId,
+    jql: 'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC',
+    fields: ['summary', 'status', 'priority', 'updated', 'reporter']
+  });
+  const data = unwrap(res);
+  if (!data) return [];
+  const issues = data.issues || [];
+  return issues.slice(0, 15).map(i => jiraIssueToTask(i, cloudId));
+}
+
+function jiraIssueToTask(issue, cloudId) {
+  const f = issue.fields || {};
+  return {
+    source: 'jira',
+    id: 'jira-' + issue.key,
+    from: f.reporter?.displayName || 'Jira',
+    title: `${issue.key}: ${f.summary || ''}`,
+    summary: f.status?.name || '',
+    received: f.updated,
+    external: false,
+    jiraPriority: f.priority?.name,
+    jiraKey: issue.key,
+    cloudId,
+    actions: []
+  };
+}
+
+function bucketOf(t) {
+  const days = daysSince(t.received);
+  if (t.source === 'jira') {
+    const p = (t.jiraPriority || '').toLowerCase();
+    if (p === 'highest' || p === 'high') return 'priority';
+    if (days > 30) return 'stale';
+    return 'decisions';
+  }
+  if (t.source === 'slack' && days <= 3) return 'priority';
+  if (t.external && days <= 3) return 'priority';
+  if (!t.external && days <= 2) return 'priority';
+  if (days > 14) return 'stale';
+  return 'decisions';
+}
+
+function statusOf(id) { return statuses[id]?.status || 'open'; }
+function setTaskStatus(id, status) {
+  if (status === 'open') delete statuses[id];
+  else statuses[id] = { status, at: new Date().toISOString() };
+  saveState();
+  rerender();
+}
+
+function svgIcon(id, extraClass) {
+  return `<svg class="${extraClass||''}"><use href="#${id}"/></svg>`;
+}
+
+function badgeFor(t) {
+  if (t.source === 'gmail') return { cls: 'badge-gmail', icon: 'i-mail', label: 'Gmail' };
+  if (t.source === 'slack') return { cls: 'badge-slack', icon: 'i-msg', label: 'Slack' };
+  return { cls: 'badge-jira', icon: 'i-brief', label: 'Jira' };
+}
+
+function escape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderCard(t) {
+  const status = statusOf(t.id);
+  const bucket = bucketOf(t);
+  const card = document.createElement('div');
+  card.className = 'card' + (bucket === 'priority' && status === 'open' ? ' priority' : '') +
+                   (status === 'done' || status === 'snoozed' ? ' muted' : '') +
+                   (status === 'done' ? ' done-status' : '');
+
+  const b = badgeFor(t);
+  const completedAt = (status === 'done' || status === 'snoozed') ? statuses[t.id]?.at : null;
+
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="badge ${b.cls}">${svgIcon(b.icon)} ${b.label} · ${escape(t.from)}</span>
+      <span class="age">${ageLabel(t.received)}</span>
+      ${completedAt ? `<span class="completed-at">${escape(status)} · ${ageLabel(completedAt)}</span>` : ''}
+    </div>
+    <div class="title">${escape(t.title)}</div>
+    ${t.summary ? `<div class="summary">${escape(t.summary)}</div>` : ''}
+    <div class="actions"></div>
+    <div class="draft-area"></div>
+  `;
+
+  const actionsEl = card.querySelector('.actions');
+
+  if (status === 'open') {
+    for (const a of t.actions) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.innerHTML = `${escape(a.label)} ${svgIcon('i-ext')}`;
+      btn.onclick = () => runDraft(card, t, a, btn);
+      actionsEl.appendChild(btn);
+    }
+    if (t.permalink) {
+      const linkBtn = document.createElement('button');
+      linkBtn.className = 'btn';
+      linkBtn.innerHTML = `Open in Slack ${svgIcon('i-ext')}`;
+      linkBtn.onclick = () => window.open(t.permalink, '_blank');
+      actionsEl.appendChild(linkBtn);
+    }
+    if (t.jiraKey) {
+      const linkBtn = document.createElement('button');
+      linkBtn.className = 'btn';
+      linkBtn.innerHTML = `Open in Jira ${svgIcon('i-ext')}`;
+      linkBtn.onclick = () => window.open(`https://synergogroup.atlassian.net/browse/${t.jiraKey}`, '_blank');
+      actionsEl.appendChild(linkBtn);
+    }
+
+    const right = document.createElement('div');
+    right.className = 'right';
+    const snoozeBtn = document.createElement('button');
+    snoozeBtn.className = 'btn-mini';
+    snoozeBtn.title = 'Snooze';
+    snoozeBtn.innerHTML = svgIcon('i-clock');
+    snoozeBtn.onclick = () => setTaskStatus(t.id, 'snoozed');
+    right.appendChild(snoozeBtn);
+    const doneBtn = document.createElement('button');
+    doneBtn.className = 'btn-mini success';
+    doneBtn.title = 'Mark done';
+    doneBtn.innerHTML = svgIcon('i-check');
+    doneBtn.onclick = () => setTaskStatus(t.id, 'done');
+    right.appendChild(doneBtn);
+    actionsEl.appendChild(right);
+  } else {
+    const reopenBtn = document.createElement('button');
+    reopenBtn.className = 'btn';
+    reopenBtn.style.padding = '4px 10px';
+    reopenBtn.style.fontSize = '12px';
+    reopenBtn.textContent = 'Reopen';
+    reopenBtn.onclick = () => setTaskStatus(t.id, 'open');
+    actionsEl.appendChild(reopenBtn);
+  }
+
+  return card;
+}
+
+async function runDraft(card, task, action, btn) {
+  const area = card.querySelector('.draft-area');
+  area.innerHTML = `<div class="draft"><div class="meta">Drafting…</div></div>`;
+  btn.disabled = true;
+  try {
+    let drafted;
+    try {
+      drafted = await window.cowork.sample(action.prompt);
+    } catch (e1) {
+      try {
+        drafted = await window.cowork.sample(action.prompt, '');
+      } catch (e2) {
+        drafted = await window.cowork.sample(action.prompt, null);
+      }
+    }
+    const text = typeof drafted === 'string' ? drafted : (drafted?.text || drafted?.content?.[0]?.text || JSON.stringify(drafted));
+    area.innerHTML = `
+      <div class="draft">
+        <div class="meta">Draft for ${escape(action.label)} — edit before sending.</div>
+        <textarea>${escape(text)}</textarea>
+        <div class="draft-actions">
+          <button class="btn primary send-btn">${action.kind === 'gmail-draft' ? 'Send to Gmail Drafts' : 'Send to Slack Drafts'}</button>
+          <button class="btn copy-btn">Copy</button>
+          <button class="btn cancel-btn">Cancel</button>
+        </div>
+        <div class="status"></div>
+      </div>
+    `;
+    const ta = area.querySelector('textarea');
+    area.querySelector('.send-btn').onclick = () => sendDraft(area, action, ta.value);
+    area.querySelector('.copy-btn').onclick = () => navigator.clipboard.writeText(ta.value);
+    area.querySelector('.cancel-btn').onclick = () => { area.innerHTML = ''; };
+  } catch (e) {
+    area.innerHTML = `<div class="draft"><div class="err">Couldn't draft: ${escape(e.message || String(e))}</div></div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function sendDraft(area, action, text) {
+  const status = area.querySelector('.status');
+  status.innerHTML = '<div class="meta">Sending…</div>';
+  try {
+    if (action.kind === 'gmail-draft') {
+      const html = '<div style="font-family:sans-serif">' + text.replace(/\n/g, '<br>') + '</div>';
+      const res = await window.cowork.callMcpTool(TOOLS.gmailDraft, {
+        to: action.to, subject: action.subject, body: text, htmlBody: html
+      });
+      if (res?.isError) throw new Error(res.content?.[0]?.text || 'gmail error');
+      status.innerHTML = '<div class="ok">Saved to Gmail Drafts.</div>';
+    } else if (action.kind === 'slack-draft') {
+      const res = await window.cowork.callMcpTool(TOOLS.slackDraft, {
+        channel_id: action.channelId, message: text
+      });
+      if (res?.isError) throw new Error(res.content?.[0]?.text || 'slack error');
+      status.innerHTML = '<div class="ok">Saved to Slack Drafts.</div>';
+    }
+  } catch (e) {
+    status.innerHTML = `<div class="err">Failed: ${escape(e.message || String(e))}</div>`;
+  }
+}
+
+function rerender() {
+  const lists = document.getElementById('lists');
+  lists.innerHTML = '';
+
+  const open = cachedTasks.filter(t => statusOf(t.id) === 'open');
+  const snoozed = cachedTasks.filter(t => statusOf(t.id) === 'snoozed');
+  const done = cachedTasks.filter(t => statusOf(t.id) === 'done');
+
+  document.getElementById('m-open').textContent = open.length;
+  document.getElementById('m-snoozed').textContent = snoozed.length;
+  document.getElementById('m-done').textContent = done.filter(t => isToday(statuses[t.id]?.at)).length;
+  document.getElementById('m-stale').textContent = open.filter(t => bucketOf(t) === 'stale').length;
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.filter === filter);
+    const f = tab.dataset.filter;
+    const n = f === 'open' ? open.length : f === 'snoozed' ? snoozed.length : done.length;
+    tab.textContent = `${f.charAt(0).toUpperCase() + f.slice(1)} (${n})`;
+  });
+
+  const visible = filter === 'open' ? open : filter === 'snoozed' ? snoozed : done;
+  if (!visible.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = filter === 'open' ? 'Inbox zero. Nothing waiting on you.' :
+                        filter === 'snoozed' ? 'Nothing snoozed.' : 'No completed tasks yet.';
+    lists.appendChild(empty);
+    updateSub(open);
+    return;
+  }
+
+  if (filter === 'open') {
+    const buckets = {
+      priority: visible.filter(t => bucketOf(t) === 'priority'),
+      decisions: visible.filter(t => bucketOf(t) === 'decisions'),
+      stale: visible.filter(t => bucketOf(t) === 'stale')
+    };
+    const meta = [
+      { key: 'priority', color: 'var(--priority)', label: 'Priority — needs you today' },
+      { key: 'decisions', color: 'var(--decision)', label: 'Needs your call — this week' },
+      { key: 'stale', color: 'var(--stale)', label: 'Stale — risk of going cold' }
+    ];
+    for (const m of meta) {
+      const list = buckets[m.key];
+      if (!list.length) continue;
+      const head = document.createElement('div');
+      head.className = 'section-head';
+      head.innerHTML = `<div class="dot" style="background:${m.color}"></div><div class="section-label">${m.label}</div>`;
+      lists.appendChild(head);
+      list.sort((a, b) => new Date(b.received || 0) - new Date(a.received || 0));
+      for (const t of list) lists.appendChild(renderCard(t));
+    }
+  } else {
+    visible.sort((a, b) => new Date(statuses[b.id]?.at || 0) - new Date(statuses[a.id]?.at || 0));
+    for (const t of visible) lists.appendChild(renderCard(t));
+  }
+
+  updateSub(open);
+}
+
+function updateSub(open) {
+  const priorityCount = open.filter(t => bucketOf(t) === 'priority').length;
+  const sub = document.getElementById('sub');
+  if (priorityCount > 0) {
+    sub.innerHTML = `<span class="accent">${priorityCount}</span> need${priorityCount === 1 ? 's' : ''} decision${priorityCount === 1 ? '' : 's'} today · pulled live just now`;
+  } else {
+    sub.textContent = `All priority items handled · pulled live just now`;
+  }
+}
+
+function reveal() {
+  cachedTasks = [...(window._gmailTasks || []), ...(window._slackTasks || []), ...(window._jiraTasks || [])];
+  const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  document.getElementById('eyebrow').textContent = `${dateLabel} · Command center`;
+  const u = window._user || {};
+  const first = (u.name || u.displayName || u.email?.split('@')[0] || 'there').split(' ')[0];
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('greeting').textContent = `${greet}, ${first}`;
+
+  if (warnings.length) {
+    document.getElementById('warnings').innerHTML = warnings.map(w => `<div class="warn">⚠ ${escape(w)}</div>`).join('');
+  }
+
+  const banner = document.getElementById('persistence-banner');
+  if (banner) {
+    const lsCount = Object.keys(stored.statuses || {}).length;
+    const embCount = Object.keys(embedded.statuses || {}).length;
+    const totalCount = Object.keys(statuses).length;
+    const lsTag = lsAvailable ? `localStorage ✓ (${lsCount})` : 'localStorage ✗';
+    const embTag = embCount > 0 ? `embedded ✓ (${embCount})` : 'embedded —';
+    banner.textContent = `Persistence: ${lsTag} · ${embTag} · ${totalCount} item${totalCount === 1 ? '' : 's'} remembered`;
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.onclick = () => { filter = tab.dataset.filter; rerender(); };
+  });
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  rerender();
+}
+
+async function boot() {
+  document.getElementById('skip-btn').onclick = reveal;
+
+  const userP = call(TOOLS.userInfo, {}, 10000).then(r => { window._user = unwrap(r) || {}; });
+  const resP = call(TOOLS.atlassianResources, {}, 10000).then(r => {
+    const resources = unwrap(r);
+    if (Array.isArray(resources) && resources[0]) return resources[0].id;
+    if (resources?.[0]) return resources[0].id;
+    return null;
+  });
+  const gmailP = loadGmail().then(t => { window._gmailTasks = t; return t; });
+  const slackP = loadSlack().then(t => { window._slackTasks = t; return t; });
+  const jiraP = resP.then(cloudId => cloudId ? loadJira(cloudId) : []).then(t => { window._jiraTasks = t; return t; });
+
+  await Promise.allSettled([userP, gmailP, slackP, jiraP]);
+  reveal();
+}
+
+boot();
+</script>
+</body>
+</html>
