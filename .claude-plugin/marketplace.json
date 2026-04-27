@@ -7,7 +7,10 @@
   "plugins": [
     {
       "name": "command-center",
-      "source": ".",
+      "source": {
+        "source": "git-subdir",
+        "path": "command-center"
+      },
       "description": "Personal command center — pulls priority items from Gmail, Slack DMs, and Jira into one Cowork dashboard with quick reply/snooze/done actions.",
       "version": "1.0.0"
     }
