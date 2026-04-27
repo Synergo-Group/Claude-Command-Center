@@ -201,6 +201,7 @@ const TOOLS = {
 const STORAGE_KEY = 'cmd_center_state_v6';
 const ARTIFACT_ID = 'command-center';
 
+// 1) localStorage attempt
 let lsAvailable = false;
 let stored = {};
 try {
@@ -212,6 +213,7 @@ try {
   lsAvailable = false;
 }
 
+// 2) Embedded state fallback — read from a <script type="application/json"> block in this very HTML
 function readEmbeddedState() {
   try {
     const el = document.getElementById('embedded-state');
@@ -223,6 +225,7 @@ function readEmbeddedState() {
 }
 const embedded = readEmbeddedState();
 
+// Merge: prefer whichever has more recent entries
 function mergeStatuses(a, b) {
   const out = { ...(a || {}) };
   for (const [k, v] of Object.entries(b || {})) {
@@ -236,8 +239,12 @@ let pendingPersistTimer = null;
 let persistInFlight = false;
 function saveState() {
   if (lsAvailable) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ statuses })); } catch (e) {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ statuses }));
+      return; // localStorage works — no need for the artifact-body fallback
+    } catch (e) {}
   }
+  // Only fall back when localStorage is unavailable
   if (pendingPersistTimer) clearTimeout(pendingPersistTimer);
   pendingPersistTimer = setTimeout(persistToArtifactBody, 2500);
 }
@@ -246,6 +253,7 @@ async function persistToArtifactBody() {
   if (persistInFlight) return;
   persistInFlight = true;
   try {
+    // Build a new HTML doc identical to current, but with the embedded-state block updated
     const stateJson = JSON.stringify({ statuses });
     const currentHtml = document.documentElement.outerHTML;
     const updated = currentHtml.replace(
@@ -390,7 +398,50 @@ async function loadSlack() {
   const messages = parseSlackResults(text);
   const byChannel = new Map();
   for (const m of messages) if (!byChannel.has(m.channelId)) byChannel.set(m.channelId, m);
-  return Array.from(byChannel.values()).map(slackMsgToTask);
+  const rawTasks = Array.from(byChannel.values()).map(slackMsgToTask);
+  return await filterActionableSlack(rawTasks);
+}
+
+// Heuristic + LLM filter: drops bot notifications, automated reports, and trivial acknowledgments.
+async function filterActionableSlack(tasks) {
+  if (!tasks.length) return tasks;
+
+  // Pass 1: cheap heuristics for obvious noise
+  const ACK_RE = /^(ok(ay)?|thanks|thx|ty|👍|✅|yes|yep|yeah|sure|will do|on it|got it|perfect|great|sounds good|noted|done|cool|nice|👀)\.?!?$/i;
+  const survivors = tasks.filter(t => {
+    const txt = (t.title || '').trim();
+    if (!txt) return false;
+    if (ACK_RE.test(txt)) return false;                       // one-word acknowledgments
+    if (/<!date\^\d+\^/.test(txt)) return false;              // Slack date tokens (calendar bots)
+    if (/^:[a-z_]+:\s*\*[^*]+\*/i.test(txt)) return false;    // emoji-prefixed bold reports (Tempo, etc.)
+    if (/google calendar|tempo|zapier bot|geekbot/i.test(t.from || '')) return false;
+    return true;
+  });
+  if (!survivors.length) return survivors;
+
+  // Pass 2: LLM classification for the gray-area ones
+  const list = survivors.map((t, i) => `[${i}] from ${t.from}: ${t.title.slice(0, 240)}`).join('\n');
+  const prompt = `You're triaging Slack DMs for a busy operations manager. For each message below, decide if it actually needs the user's attention or response, or if it's noise (FYI updates, automated digests, casual acknowledgments, status pings that don't ask anything).
+
+Messages:
+${list}
+
+Reply with ONLY a JSON array of "keep" or "skip" strings, one per message in order. No prose, no markdown, no commentary.`;
+
+  try {
+    let response;
+    try { response = await window.cowork.sample(prompt); }
+    catch (e) { response = await window.cowork.sample(prompt, ''); }
+    const raw = typeof response === 'string' ? response : (response?.text || response?.content?.[0]?.text || '');
+    const match = raw.match(/\[[\s\S]*?\]/);
+    if (!match) return survivors;
+    const verdicts = JSON.parse(match[0]);
+    if (!Array.isArray(verdicts) || verdicts.length !== survivors.length) return survivors;
+    return survivors.filter((_, i) => verdicts[i] !== 'skip');
+  } catch (e) {
+    console.warn('Slack LLM classification failed; keeping all heuristic-survivors', e);
+    return survivors;
+  }
 }
 
 function parseSlackResults(text) {
@@ -594,11 +645,8 @@ async function runDraft(card, task, action, btn) {
     try {
       drafted = await window.cowork.sample(action.prompt);
     } catch (e1) {
-      try {
-        drafted = await window.cowork.sample(action.prompt, '');
-      } catch (e2) {
-        drafted = await window.cowork.sample(action.prompt, null);
-      }
+      // Some cowork builds require a string data arg
+      drafted = await window.cowork.sample(action.prompt, '');
     }
     const text = typeof drafted === 'string' ? drafted : (drafted?.text || drafted?.content?.[0]?.text || JSON.stringify(drafted));
     area.innerHTML = `
@@ -722,7 +770,7 @@ function reveal() {
   const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   document.getElementById('eyebrow').textContent = `${dateLabel} · Command center`;
   const u = window._user || {};
-  const first = (u.name || u.displayName || u.email?.split('@')[0] || 'there').split(' ')[0];
+  const first = (u.name || u.displayName || u.email?.split('@')[0] || 'Valentin').split(' ')[0];
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   document.getElementById('greeting').textContent = `${greet}, ${first}`;
@@ -731,6 +779,7 @@ function reveal() {
     document.getElementById('warnings').innerHTML = warnings.map(w => `<div class="warn">⚠ ${escape(w)}</div>`).join('');
   }
 
+  // Persistence diagnostic
   const banner = document.getElementById('persistence-banner');
   if (banner) {
     const lsCount = Object.keys(stored.statuses || {}).length;
