@@ -149,7 +149,8 @@
       </div>
     </div>
     <div class="sub" id="sub"></div>
-    <div id="persistence-banner" style="font-size:11px;color:var(--faint);margin-bottom:1rem"></div>
+    <div id="persistence-banner" style="font-size:11px;color:var(--faint);margin-bottom:4px"></div>
+    <div id="load-summary" style="font-size:11px;color:var(--faint);margin-bottom:1rem"></div>
     <div id="warnings"></div>
 
     <div class="metrics">
@@ -200,6 +201,7 @@ const TOOLS = {
 
 const STORAGE_KEY = 'cmd_center_state_v6';
 const ARTIFACT_ID = 'command-center';
+const JIRA_HOST = 'synergo.atlassian.net'; // used as cloudId fallback and for "Open in Jira" links
 
 // 1) localStorage attempt
 let lsAvailable = false;
@@ -399,49 +401,30 @@ async function loadSlack() {
   const byChannel = new Map();
   for (const m of messages) if (!byChannel.has(m.channelId)) byChannel.set(m.channelId, m);
   const rawTasks = Array.from(byChannel.values()).map(slackMsgToTask);
-  return await filterActionableSlack(rawTasks);
+  const { tasks: filteredTasks, filtered } = filterActionableSlack(rawTasks);
+  window._slackFiltered = filtered;
+  window._slackRaw = rawTasks.length;
+  return filteredTasks;
 }
 
-// Heuristic + LLM filter: drops bot notifications, automated reports, and trivial acknowledgments.
-async function filterActionableSlack(tasks) {
-  if (!tasks.length) return tasks;
+// Heuristic-only filter: drops bot notifications, automated reports, and trivial acknowledgments.
+// (We previously had an LLM pass via cowork.sample, but Cowork's bridge surfaces an
+// "MCP error -32601" toast when sample is called from artifacts on initial load —
+// even though the artifact catches it logically. Heuristics handle the obvious cases.)
+function filterActionableSlack(tasks) {
+  if (!tasks.length) return { tasks, filtered: 0 };
 
-  // Pass 1: cheap heuristics for obvious noise
   const ACK_RE = /^(ok(ay)?|thanks|thx|ty|👍|✅|yes|yep|yeah|sure|will do|on it|got it|perfect|great|sounds good|noted|done|cool|nice|👀)\.?!?$/i;
   const survivors = tasks.filter(t => {
     const txt = (t.title || '').trim();
     if (!txt) return false;
     if (ACK_RE.test(txt)) return false;                       // one-word acknowledgments
     if (/<!date\^\d+\^/.test(txt)) return false;              // Slack date tokens (calendar bots)
-    if (/^:[a-z_]+:\s*\*[^*]+\*/i.test(txt)) return false;    // emoji-prefixed bold reports (Tempo, etc.)
-    if (/google calendar|tempo|zapier bot|geekbot/i.test(t.from || '')) return false;
+    if (/^:[a-z_]+:\s*\*[^*]+\*/i.test(txt)) return false;    // emoji-prefixed bold reports (Tempo etc.)
+    if (/google calendar|tempo|zapier|geekbot|reminder|pagerduty/i.test(t.from || '')) return false;
     return true;
   });
-  if (!survivors.length) return survivors;
-
-  // Pass 2: LLM classification for the gray-area ones
-  const list = survivors.map((t, i) => `[${i}] from ${t.from}: ${t.title.slice(0, 240)}`).join('\n');
-  const prompt = `You're triaging Slack DMs for a busy operations manager. For each message below, decide if it actually needs the user's attention or response, or if it's noise (FYI updates, automated digests, casual acknowledgments, status pings that don't ask anything).
-
-Messages:
-${list}
-
-Reply with ONLY a JSON array of "keep" or "skip" strings, one per message in order. No prose, no markdown, no commentary.`;
-
-  try {
-    let response;
-    try { response = await window.cowork.sample(prompt); }
-    catch (e) { response = await window.cowork.sample(prompt, ''); }
-    const raw = typeof response === 'string' ? response : (response?.text || response?.content?.[0]?.text || '');
-    const match = raw.match(/\[[\s\S]*?\]/);
-    if (!match) return survivors;
-    const verdicts = JSON.parse(match[0]);
-    if (!Array.isArray(verdicts) || verdicts.length !== survivors.length) return survivors;
-    return survivors.filter((_, i) => verdicts[i] !== 'skip');
-  } catch (e) {
-    console.warn('Slack LLM classification failed; keeping all heuristic-survivors', e);
-    return survivors;
-  }
+  return { tasks: survivors, filtered: tasks.length - survivors.length };
 }
 
 function parseSlackResults(text) {
@@ -486,16 +469,22 @@ function slackMsgToTask(m) {
 }
 
 async function loadJira(cloudId) {
-  if (!cloudId) return [];
-  const res = await call(TOOLS.jiraSearch, {
-    cloudId,
-    jql: 'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC',
-    fields: ['summary', 'status', 'priority', 'updated', 'reporter']
-  });
-  const data = unwrap(res);
-  if (!data) return [];
-  const issues = data.issues || [];
-  return issues.slice(0, 15).map(i => jiraIssueToTask(i, cloudId));
+  // Try the resolved UUID first, then fall back to the hostname (the Atlassian MCP supports both).
+  const candidates = [cloudId, JIRA_HOST].filter(Boolean);
+  for (const cid of candidates) {
+    const res = await call(TOOLS.jiraSearch, {
+      cloudId: cid,
+      jql: 'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC',
+      fields: ['summary', 'status', 'priority', 'updated', 'reporter'],
+      maxResults: 25
+    });
+    const data = unwrap(res);
+    const issues = data?.issues || data?.values || [];
+    if (issues.length) {
+      return issues.slice(0, 15).map(i => jiraIssueToTask(i, cid));
+    }
+  }
+  return [];
 }
 
 function jiraIssueToTask(issue, cloudId) {
@@ -600,7 +589,7 @@ function renderCard(t) {
     if (t.jiraKey) {
       const linkBtn = document.createElement('a');
       linkBtn.className = 'btn';
-      linkBtn.href = `https://synergogroup.atlassian.net/browse/${t.jiraKey}`;
+      linkBtn.href = `https://${JIRA_HOST}/browse/${t.jiraKey}`;
       linkBtn.target = '_blank';
       linkBtn.rel = 'noopener noreferrer';
       linkBtn.style.textDecoration = 'none';
@@ -790,6 +779,19 @@ function reveal() {
     banner.textContent = `Persistence: ${lsTag} · ${embTag} · ${totalCount} item${totalCount === 1 ? '' : 's'} remembered`;
   }
 
+  const loadEl = document.getElementById('load-summary');
+  if (loadEl) {
+    const gmail = (window._gmailTasks || []).length;
+    const slack = (window._slackTasks || []).length;
+    const slackFiltered = window._slackFiltered || 0;
+    const jira = (window._jiraTasks || []).length;
+    const slackTag = slackFiltered > 0
+      ? `${slack} Slack (filtered ${slackFiltered} noise)`
+      : `${slack} Slack`;
+    const errs = warnings.length ? ` · ⚠ ${warnings.length} load error${warnings.length === 1 ? '' : 's'}` : '';
+    loadEl.textContent = `Loaded: ${gmail} Gmail · ${slackTag} · ${jira} Jira${errs}`;
+  }
+
   document.querySelectorAll('.tab').forEach(tab => {
     tab.onclick = () => { filter = tab.dataset.filter; rerender(); };
   });
@@ -811,13 +813,4 @@ async function boot() {
   });
   const gmailP = loadGmail().then(t => { window._gmailTasks = t; return t; });
   const slackP = loadSlack().then(t => { window._slackTasks = t; return t; });
-  const jiraP = resP.then(cloudId => cloudId ? loadJira(cloudId) : []).then(t => { window._jiraTasks = t; return t; });
-
-  await Promise.allSettled([userP, gmailP, slackP, jiraP]);
-  reveal();
-}
-
-boot();
-</script>
-</body>
-</html>
+  const jiraP = resP.then(cloudId => cloudI
