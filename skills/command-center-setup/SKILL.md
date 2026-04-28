@@ -20,7 +20,7 @@ You are setting up a persistent Cowork artifact called "Command Center" — a si
 
 3. **Read the artifact template.** It's at `artifact-template.html` in this skill's directory. The template has placeholder tokens like `{{GMAIL_SEARCH}}` that you need to replace.
 
-4. **Substitute the placeholders** with the exact MCP tool names from step 2:
+4. **Substitute the MCP tool placeholders** with the exact MCP tool names from step 2:
 
    | Placeholder              | Replace with the tool name for                         |
    |--------------------------|--------------------------------------------------------|
@@ -34,15 +34,24 @@ You are setting up a persistent Cowork artifact called "Command Center" — a si
 
    Each token should be replaced with the FULL tool name including the `mcp__<uuid>__` prefix. Do not invent UUIDs — pull them from the actual tool names you see in your available tool list.
 
-5. **Detect the user's email domain** for the "external sender" heuristic. Get the user's email — either from their session info, or by asking them briefly: "What email domain should I treat as 'internal' (e.g., yourcompany.com)?". Replace the string `synergo` in the template (it appears once, in the `isExternalEmail` function) with the lowercase domain root they give you (e.g., `acme` for `acme.com`). If they're at Synergo too, leave it as-is.
+5. **Detect the user's Atlassian site host** and substitute it for `{{JIRA_HOST}}`. Call `getAccessibleAtlassianResources` once. The response is an array; take `result[0].url` (e.g. `https://acme.atlassian.net`) and use just the hostname (`acme.atlassian.net`) — strip the `https://` prefix and any trailing slash. If the user has multiple sites in the response, ask them which one they want the dashboard pointed at. This value is used both as a `cloudId` fallback for the JQL search and to build "Open in Jira" links, so it has to be exact.
 
-6. **Create the artifact** by calling `mcp__cowork__create_artifact` with:
+6. **Detect the user's internal email domain keyword** and substitute it for `{{INTERNAL_DOMAIN_KEYWORD}}`. Call `atlassianUserInfo` to get the user's email. Take the domain part (everything after `@`), drop the TLD (`.com`, `.group`, `.io`, `.co.uk`, etc.), and lowercase the result. Examples:
+   - `valentin@synergo.group` → `synergo`
+   - `jane@acme-corp.com` → `acme-corp`
+   - `bob@example.co.uk` → `example`
+
+   If the email lookup fails or the user has a generic gmail.com / outlook.com address, ask them: "What's the lowercase keyword that identifies emails from your team? (e.g. `acme` for everyone at acme.com)". The artifact uses this as a case-insensitive substring check, so it's forgiving — a partial match is fine.
+
+7. **Create the artifact** by calling `mcp__cowork__create_artifact` with:
    - `id: "command-center"` (kebab-case slug)
    - `html`: the substituted template body, complete and self-contained
    - `description`: "Live priority dashboard pulling from Gmail, Slack DMs, and Jira"
    - `mcp_tools`: the array of fully-qualified MCP tool names you used
 
-7. **Tell the user it's ready** — one or two short sentences. Mention that the first load will take 5–15 seconds while it pulls live data from each source, and that done/snoozed items persist across reloads via localStorage with a fallback to embedded state.
+8. **Verify no placeholders survived** before passing the HTML to `create_artifact`. Search the substituted string for `{{` — if any survive, you missed a substitution and the artifact will silently break. The full set you must replace is: `{{ATLASSIAN_USER_INFO}}`, `{{ATLASSIAN_RESOURCES}}`, `{{JIRA_SEARCH}}`, `{{GMAIL_SEARCH}}`, `{{GMAIL_DRAFT}}`, `{{SLACK_SEARCH}}`, `{{SLACK_DRAFT}}`, `{{JIRA_HOST}}`, `{{INTERNAL_DOMAIN_KEYWORD}}`.
+
+9. **Tell the user it's ready** — one or two short sentences. Mention that the first load will take 5–15 seconds while it pulls live data from each source, and that done/snoozed items persist across reloads via localStorage.
 
 ## Common pitfalls
 

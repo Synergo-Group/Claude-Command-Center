@@ -201,7 +201,8 @@ const TOOLS = {
 
 const STORAGE_KEY = 'cmd_center_state_v6';
 const ARTIFACT_ID = 'command-center';
-const JIRA_HOST = 'synergo.atlassian.net'; // used as cloudId fallback and for "Open in Jira" links
+const JIRA_HOST = '{{JIRA_HOST}}'; // used as cloudId fallback and for "Open in Jira" links
+const INTERNAL_DOMAIN_KEYWORD = '{{INTERNAL_DOMAIN_KEYWORD}}'; // case-insensitive substring that means "internal sender"
 
 // 1) localStorage attempt
 let lsAvailable = false;
@@ -344,7 +345,7 @@ function isExternalEmail(email) {
   if (!email) return false;
   const m = email.match(/@([^>\s]+)/);
   if (!m) return false;
-  return !m[1].toLowerCase().includes('synergo');
+  return !m[1].toLowerCase().includes(INTERNAL_DOMAIN_KEYWORD);
 }
 function emailToName(email) {
   if (!email) return 'Unknown';
@@ -812,5 +813,4 @@ async function boot() {
     return null;
   });
   const gmailP = loadGmail().then(t => { window._gmailTasks = t; return t; });
-  const slackP = loadSlack().then(t => { window._slackTasks = t; return t; });
-  const jiraP = resP.then(cloudId => cloudI
+  cons

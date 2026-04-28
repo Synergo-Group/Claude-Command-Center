@@ -2,7 +2,7 @@
 
 A persistent dashboard that lives in your Cowork sidebar and surfaces priority items from Gmail, Slack DMs, and Jira — with one-click "draft reply", "snooze", and "mark done" actions.
 
-Built for Synergo Group teammates, but works at any company (you'll just confirm your email domain during setup).
+Works at any company that uses Gmail + Slack + Atlassian/Jira. The setup skill auto-detects your Atlassian site host and your internal email domain — no code changes needed per company.
 
 ---
 
@@ -52,7 +52,7 @@ In Cowork, just say:
 Claude will:
 
 1. Verify your Gmail, Slack, and Jira connectors are present.
-2. Ask once for your company's email domain (so it knows what counts as "external"). Skip this step if you're at Synergo.
+2. Auto-detect your Atlassian site host (from `getAccessibleAtlassianResources`) and your internal email domain (from `atlassianUserInfo`). If you have multiple Atlassian sites or use a generic email domain like gmail.com, Claude will ask which one to use.
 3. Create the artifact in your Cowork sidebar.
 
 First load takes 5–15 seconds while it pulls live data from each source. After that, it's instant.
@@ -66,14 +66,15 @@ First load takes 5–15 seconds while it pulls live data from each source. After
 
 ## State persistence
 
-The artifact tries `localStorage` first. If your Cowork iframe wipes localStorage between sessions, it falls back to writing state into the artifact's own HTML body via a debounced `update_artifact` call. The diagnostic line under the greeting tells you which mechanism is currently holding state.
+Done/snoozed status persists in `localStorage`. The diagnostic line under the greeting confirms how many items are remembered.
 
 ## Troubleshooting
 
-- **"localStorage ✗" in the persistence banner**: that's expected on some Cowork builds. The embedded fallback should kick in after your first done/snooze click. If "embedded" stays at `—` after marking and reloading, the fallback isn't working either — DM Valentin.
+- **"localStorage ✗" in the persistence banner**: your Cowork build is sandboxing storage. Done/snooze marks won't survive reloads. (An embedded-state fallback is wired in for that case but requires `mcp__cowork__update_artifact` to be callable from artifacts, which isn't always available.)
 - **Loading screen never reveals**: click "Show what loaded so far" to see which MCP call is hung. Most likely a stale connector — disconnect/reconnect that one.
 - **Slack DMs missing a recent message**: the artifact dedupes per channel (one entry per Slack thread). If you have a long DM with someone, only the latest message shows up.
 - **Wrong items flagged as Priority**: the heuristic uses recency + sender external/internal. Edit `bucketOf()` in `artifact-template.html` to tune it.
+- **0 Jira issues but you have tickets assigned**: the auto-detected `JIRA_HOST` may have been set wrong. Open the artifact source, find `const JIRA_HOST = '...'`, and check it matches your Atlassian site (e.g. `acme.atlassian.net`). Re-run the setup skill if needed.
 
 ## Customizing
 
